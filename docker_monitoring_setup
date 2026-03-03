@@ -1,0 +1,193 @@
+Docker Monitoring using (Prometheus + Grafana)
+
+Data Flow:
+Docker → metrics (9323)
+   ↓
+Prometheus → collects metrics (9090)
+   ↓
+Grafana → shows graphs (3000)
+
+  
+STEP 1 — Create 2 Ubuntu Machines
+
+Create 2 EC2 / VM instances:
+
+Machine 1
+Name: docker-server
+Purpose: Docker + Prometheus
+  
+Machine 2
+Name: grafana-machine
+Purpose: Grafana
+  
+Security Group Rules -
+  
+Grafana Machine -
+  
+Allow:
+3000 → Anywhere
+
+Docker Server -
+
+Allow:
+9090 → Anywhere
+9323 → Anywhere
+
+
+STEP 2 — Update Both Machines
+
+SSH into both machines and run:
+
+sudo su
+apt update -y
+
+STEP 3 — Setup Grafana Machine
+
+Login to grafana-machine.
+
+Install Grafana -
+  
+wget https://dl.grafana.com/enterprise/release/grafana-enterprise-8.4.4.linux-amd64.tar.gz
+tar -zxvf grafana-enterprise-8.4.4.linux-amd64.tar.gz
+cd grafana-8.4.4
+./bin/grafana-server
+
+Open Grafana UI -
+
+Browser:
+http://<grafana-public-ip>:3000
+
+Login:
+
+username: admin
+password: admin
+
+If this opens → Grafana ready.
+
+STEP 4 — Setup Docker Server
+
+SSH into docker-server.
+
+Install Docker -
+  
+apt update
+apt install docker.io -y
+service docker start
+
+Run test containers -
+
+docker run -dt ubuntu
+docker run -dt ubuntu
+
+This creates containers so monitoring shows data.
+
+STEP 5 — Install Prometheus on Docker Server
+
+Download Prometheus -
+  
+wget https://github.com/prometheus/prometheus/releases/download/v2.34.0/prometheus-2.34.0.linux-amd64.tar.gz
+tar zxvf prometheus-2.34.0.linux-amd64.tar.gz
+cd prometheus-2.34.0.linux-amd64
+
+
+STEP 6 — Enable Docker Metrics 
+
+We tell Docker to expose metrics.
+
+Edit docker config -
+  
+vi /etc/docker/daemon.json
+
+Press i and paste:
+
+{
+  "metrics-addr" : "0.0.0.0:9323",
+  "experimental" : true
+}
+
+Save:
+ESC → :wq
+
+Restart docker - 
+service docker restart
+
+Verify Docker Metrics -
+Open browser:
+
+http://<docker-server-ip>:9323/metrics
+
+You should see long text stats.
+
+If yes → success.
+
+STEP 7 — Configure Prometheus to Read Docker Metrics
+
+Edit config
+
+Inside prometheus folder -
+vi prometheus.yml
+
+Add under scrape_configs:
+
+- job_name: "docker"
+  static_configs:
+    - targets: ["localhost:9323"]
+
+Start Prometheus - 
+./prometheus
+
+Check Prometheus UI -
+
+http://<docker-server-ip>:9090
+
+Go:
+
+Status → Targets
+You should see docker target UP.
+
+If UP → Prometheus working.
+
+STEP 8 — Connect Prometheus to Grafana
+
+Go back to grafana-machine UI.
+
+Add Data Source
+Settings → Data Sources → Add Data Source
+
+Choose:
+Prometheus
+
+URL:
+http://<docker-server-ip>:9090
+
+Click:
+Save & Test
+
+📊 STEP 9 — Create Monitoring Dashboard
+Create Panel
++ → Dashboard → Add Panel
+
+Try queries:
+
+engine_daemon_container_states_containers{state="running"}
+engine_daemon_container_states_containers{state="stopped"}
+
+You’ll see container counts.
+
+STEP 10 — For Import Ready Dashboard 
+
++ → Import
+
+Dashboard ID:
+21040
+
+Choose Prometheus datasource.
+
+You’ll get full Docker monitoring dashboard instantly.
+
+Finally you will have:
+
+✔ Grafana running → port 3000
+✔ Prometheus running → port 9090
+✔ Docker metrics → port 9323
+✔ Dashboard showing container stats
